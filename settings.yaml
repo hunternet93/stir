@@ -1,0 +1,18 @@
+resolution: [1280, 720]
+
+sources:
+    - webcam:
+        type: uri
+        uri: v4l2:///dev/video0
+    - test:
+        type: test
+
+mixers:
+    - Projectors:
+        mixes:
+            - Webcam/Test alpha blend
+                - test
+                - webcam:
+                    alpha: 0.5
+        outputs:
+            - simple
