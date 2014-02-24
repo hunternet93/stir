@@ -2,17 +2,36 @@ resolution: [1280, 720]
 
 sources:
     - webcam:
-        type: uri
-        uri: v4l2:///dev/video0
+        type: v4l2
+        device: /dev/video0
     - test:
         type: test
 
 mixers:
-    - Projectors:
+    - TestA:
+        sources:
+            - test
+            - webcam
         mixes:
-            - Webcam/Test alpha blend
-                - test
+            - Webcam/Test alpha blend:
                 - webcam:
                     alpha: 0.5
-        outputs:
-            - simple
+            - Webcam/Test picture-in-picture:
+                - webcam:
+                    alpha: 0.8
+                    width: 320
+                    height: 180
+                    x: 960
+                    y: 540
+            - Webcam Only
+            - Test Only:
+                - webcam:
+                    alpha: 0
+    - TestB:
+        sources:
+            - test
+        mixes:
+            - Test
+            - Test alpha:
+                - webcam:
+                    alpha: 0.5
