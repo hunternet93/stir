@@ -6,6 +6,8 @@ sources:
         device: /dev/video0
     - test:
         type: test
+    - mic:
+        type: pulse
 
 mixers:
     - TestA:
@@ -27,6 +29,11 @@ mixers:
             - Test Only:
                 - webcam:
                     alpha: 0
+#        outputs:
+#            - udp:
+#                host: 224.10.99.1
+#                port: 6473
+#                audio: yes
     - TestB:
         sources:
             - test

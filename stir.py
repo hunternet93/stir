@@ -2,108 +2,14 @@
 import yaml, gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst, Gtk, GstVideo, GdkX11
+from sources import *
+from sinks import *
+
 GObject.threads_init()
 Gst.init(None)
+Gtk.init(None)
 
-class TestSource:
-    def __init__(self, name, props, main):
-        self.name = name
-        self.props = props
-        self.main = main
-
-        self.src = Gst.ElementFactory.make('videotestsrc', 'videotestsrc-' + name)
-        self.main.pipeline.add(self.src)
-
-        self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
-        self.main.pipeline.add(self.tee)
-        self.src.link(self.tee)
-
-
-class URISource:
-    def __init__(self, name, props, main):
-        self.name = name
-        self.props = props
-        self.uri = props['uri']
-        self.main = main
-
-        self.src = Gst.ElementFactory.make('uridecodebin', 'uridecodebin-' + name)
-        self.main.pipeline.add(self.src)
-        self.src.set_property('uri', self.uri)
-
-        self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
-        self.main.pipeline.add(self.tee)
-
-        self.src.connect('pad-added', self.on_pad_added, self.tee)
-
-    def on_pad_added(self, element, srcpad, dest):
-        name = srcpad.query_caps(None).to_string()
-        print('on_pad_added:', name)
-        if name.startswith('video/'):
-            sinkpad = dest.get_static_pad('sink')
-            srcpad.link(sinkpad)
-            print(srcpad.is_linked())
-
-
-class V4L2Source:
-    def __init__(self, name, props, main):
-        self.name = name
-        self.props = props
-        self.device = props['device']
-        self.main = main
-
-        self.src = Gst.ElementFactory.make('v4l2src', 'v4l2src-' + name)
-        self.main.pipeline.add(self.src)
-        self.src.set_property('device', self.device)
-
-        self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
-        self.main.pipeline.add(self.tee)
-        self.src.link(self.tee)
-
-
-class Processor:
-    def __init__(self, source, sink, name, props, main):
-        self.source = source
-        self.sink = sink
-        self.main = main
-
-        self.queue = Gst.ElementFactory.make('queue', 'queue-' + name)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
-        caps = Gst.Caps.from_string("video/x-raw")
-        caps.set_value('width', int(self.main.settings['resolution'][0]))
-        caps.set_value('height', int(self.main.settings['resolution'][1]))
-        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
-        self.main.pipeline.add(self.capsfilter)
-        self.capsfilter.set_property('caps', caps)
-        self.queue.link(self.capsfilter)
-
-        self.rate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
-        self.main.pipeline.add(self.rate)
-        self.capsfilter.link(self.rate)
-
-        self.alpha = Gst.ElementFactory.make('alpha', 'alpha-' + name)
-        self.main.pipeline.add(self.alpha)
-        self.rate.link(self.alpha)
-
-        alphapad = self.alpha.get_static_pad('src')
-        self.sinkpad = self.sink.get_compatible_pad(alphapad, None)
-        alphapad.link(self.sinkpad)
-
-
-class SimpleVideoSink:
-    def __init__(self, source, name, props, main):
-        self.source = source
-        self.main = main
-
-        self.queue = Gst.ElementFactory.make('queue', 'queue' + name)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
-        self.autovideosink = Gst.ElementFactory.make('autovideosink', 'autovideosink' + name)
-        self.main.pipeline.add(self.autovideosink)
-        self.queue.link(self.autovideosink)
-
+# TODO: Figure out why UDPSink causes everything to hang.
 
 class Mixer:
     def __init__(self, name, mixdict, main):
@@ -173,7 +79,10 @@ class Mixer:
                     outputtype, props = output, None
 
                 if outputtype == 'simple':
-                    output = SimpleVideoSink(self.tee, self.name, None, self.main)
+                    output = SimpleVideoSink(self.tee, self.name, props, self.main)
+                    self.outputs.append(output)
+                if outputtype == 'udp':
+                    output = UDPSink(self.tee, self.name, props, self.main)
                     self.outputs.append(output)
 
         self.buttons[0].set_active(True)
@@ -195,11 +104,13 @@ class Mixer:
 
                 processor = self.processors[sourcename]
 
-                processor.alpha.set_property('alpha', props.get('alpha') or 1)
+                if not props.get('alpha') == None: processor.alpha.set_property('alpha', props.get('alpha'))
+                else: processor.alpha.set_property('alpha', 1)
 
                 caps = Gst.Caps.from_string("video/x-raw")
                 caps.set_value('width', props.get('width') or int(self.main.settings['resolution'][0]))
                 caps.set_value('height', props.get('height') or int(self.main.settings['resolution'][1]))
+                print('caps:', caps.to_string())
                 processor.capsfilter.set_property('caps', caps)
 
                 processor.sinkpad.set_property('xpos', props.get('x') or 0)
@@ -228,8 +139,20 @@ class Main:
         self.bus.enable_sync_message_emission()
         self.bus.connect('sync-message::element', self.on_sync_message)
 
+        self.audiomixer = Gst.ElementFactory.make('adder', 'audiomixer')
+        self.pipeline.add(self.audiomixer)
+
+        self.audiotee = Gst.ElementFactory.make('tee', 'tee-audio')
+        self.pipeline.add(self.audiotee)
+        self.audiomixer.link(self.audiotee)
+
+        self.audiofakesink = Gst.ElementFactory.make('fakesink', 'fakesink-audio')
+        self.pipeline.add(self.audiofakesink)
+        self.audiotee.link(self.audiofakesink)
+
         self.mixers = {}
         self.sources = {}
+        self.audiosources = {}
 
         for source in self.settings['sources']:
             name, prop = list(source.items())[0]
@@ -240,9 +163,15 @@ class Main:
             if prop['type'] == 'v4l2':
                 self.sources[name] = V4L2Source(name, prop, self)
 
+            if prop['type'] == 'pulse':
+                self.audiosources[name] = PulseaudioSource(name, prop, self)
+
         for mixer in self.settings['mixers']:
             name, prop = list(mixer.items())[0]
             self.mixers[name] = Mixer(name, prop, self)
+
+        for source in self.audiosources.values():
+            source.src.link(self.audiomixer)
 
         self.window.show_all()
 
