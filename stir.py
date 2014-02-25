@@ -160,6 +160,8 @@ class Main:
                 self.sources[name] = URISource(name, prop, self)
             if prop['type'] == 'v4l2':
                 self.sources[name] = V4L2Source(name, prop, self)
+            if prop['type'] == 'decklink':
+                self.sources[name] = DecklinkSource(name, prop, self)
 
             if prop['type'] == 'pulse':
                 self.audiosources[name] = PulseaudioSource(name, prop, self)

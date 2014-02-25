@@ -3,8 +3,10 @@ framerate: 30/1
 
 sources:
     - webcam:
-        type: v4l2
-        device: /dev/video0
+        type: decklink
+        device: 0
+        mode: 14
+        connection: hdmi
     - test:
         type: test
     - mic:
