@@ -50,9 +50,54 @@ class V4L2Source:
         self.main.pipeline.add(self.src)
         self.src.set_property('device', self.device)
 
+        self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
+        self.main.pipeline.add(self.videorate)
+        self.videorate.set_property('skip-to-first', True)
+        self.src.link(self.videorate)
+
+        caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
+
+        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
+        self.main.pipeline.add(self.capsfilter)
+        self.capsfilter.set_property('caps', caps)
+        self.videorate.link(self.capsfilter)
+
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
         self.main.pipeline.add(self.tee)
-        self.src.link(self.tee)
+        self.capsfilter.link(self.tee)
+
+
+class DecklinkSource:
+    def __init__(self, name, props, main):
+        self.name = name
+        self.props = props
+        self.device = props['device']
+        self.mode = props['mode']
+        self.connection = props['connection']
+        self.main = main
+
+        self.src = Gst.ElementFactory.make('decklinksrc', 'decklinksrc-' + name)
+        self.main.pipeline.add(self.src)
+        self.src.set_property('device-number', self.device)
+        self.src.set_property('connection', self.connection)
+        self.src.set_property('mode', self.mode)
+
+        self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
+        self.main.pipeline.add(self.videorate)
+        self.videorate.set_property('skip-to-first', True)
+        self.src.link(self.videorate)
+
+        caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
+
+        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
+        self.main.pipeline.add(self.capsfilter)
+        self.capsfilter.set_property('caps', caps)
+        self.videorate.link(self.capsfilter)
+
+        self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
+        self.main.pipeline.add(self.tee)
+        self.capsfilter.link(self.tee)
+
 
 class PulseaudioSource:
     def __init__(self, name, props, main):

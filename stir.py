@@ -61,7 +61,6 @@ class Mixer:
             else:
                 name, prop = mix, None
             self.mixes[name] = prop
-            print('adding mix ', name, prop)
 
             try: button = Gtk.RadioButton.new_with_label_from_widget(self.buttons[0], name)
             except IndexError: button = Gtk.RadioButton.new_with_label_from_widget(None, name)
@@ -110,7 +109,6 @@ class Mixer:
                 caps = Gst.Caps.from_string("video/x-raw")
                 caps.set_value('width', props.get('width') or int(self.main.settings['resolution'][0]))
                 caps.set_value('height', props.get('height') or int(self.main.settings['resolution'][1]))
-                print('caps:', caps.to_string())
                 processor.capsfilter.set_property('caps', caps)
 
                 processor.sinkpad.set_property('xpos', props.get('x') or 0)
@@ -183,7 +181,7 @@ class Main:
         Gtk.main()
 
     def quit(self, window):
-        Gst.debug_bin_to_dot_file(self.pipeline, Gst.DebugGraphDetails.ALL, 'pipeline.dot')
+        Gst.debug_bin_to_dot_file(self.pipeline, Gst.DebugGraphDetails.ALL, 'pipeline')
         self.pipeline.set_state(Gst.State.NULL)
         Gtk.main_quit()
 

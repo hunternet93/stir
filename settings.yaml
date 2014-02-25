@@ -1,4 +1,5 @@
 resolution: [1280, 720]
+framerate: 30/1
 
 sources:
     - webcam:
