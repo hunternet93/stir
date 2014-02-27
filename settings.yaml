@@ -1,18 +1,23 @@
 resolution: [1280, 720]
-framerate: 30/1
+framerate: 25/1
 
 sources:
     - webcam:
-        type: decklink
-        device: 0
-        mode: 14
-        connection: hdmi
+        type: v4l2
+        device: /dev/video0
     - test:
         type: test
     - mic:
-        type: pulse
+        type: jack
 
 mixers:
+    - audio:
+        outputs:
+#            - simple
+            - udp:
+                host: 224.1.2.3
+                port: 5556
+                encoder: l16
     - TestA:
         sources:
             - test
@@ -32,11 +37,12 @@ mixers:
             - Test Only:
                 - webcam:
                     alpha: 0
-#        outputs:
-#            - udp:
-#                host: 224.10.99.1
-#                port: 6473
-#                audio: yes
+        outputs:
+            - udp:
+                host: 224.1.2.3
+                port: 5555
+                encoder: h264
+                preset: slow
     - TestB:
         sources:
             - test

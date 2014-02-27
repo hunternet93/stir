@@ -50,21 +50,25 @@ class V4L2Source:
         self.main.pipeline.add(self.src)
         self.src.set_property('device', self.device)
 
+        caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
+        self.capsfilter1 = Gst.ElementFactory.make('capsfilter', 'capsfilter1-' + name)
+        self.capsfilter2 = Gst.ElementFactory.make('capsfilter', 'capsfilter2-' + name)
+        self.main.pipeline.add(self.capsfilter1)
+        self.main.pipeline.add(self.capsfilter2)
+        self.capsfilter1.set_property('caps', caps)
+        self.capsfilter2.set_property('caps', caps)
+        self.src.link(self.capsfilter1)
+
         self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
         self.main.pipeline.add(self.videorate)
         self.videorate.set_property('skip-to-first', True)
-        self.src.link(self.videorate)
+        self.capsfilter1.link(self.videorate)
 
-        caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
-
-        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
-        self.main.pipeline.add(self.capsfilter)
-        self.capsfilter.set_property('caps', caps)
-        self.videorate.link(self.capsfilter)
+        self.videorate.link(self.capsfilter2)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
         self.main.pipeline.add(self.tee)
-        self.capsfilter.link(self.tee)
+        self.capsfilter2.link(self.tee)
 
 
 class DecklinkSource:
@@ -112,6 +116,19 @@ class PulseaudioSource:
         self.src.set_property('client-name', "Stir - Video Mixer")
 
 
+class JackSource:
+    def __init__(self, name, props, main):
+        self.name = name
+        self.props = props
+        self.device = props.get('device')
+        self.main = main
+
+        self.src = Gst.ElementFactory.make('jackaudiosrc', 'jackaudiosrc-' + name)
+        self.main.pipeline.add(self.src)
+        self.src.set_property('client-name', "stir")
+        self.src.set_property('buffer-time', 10000)
+
+
 class Processor:
     def __init__(self, source, sink, name, props, main):
         self.source = source
@@ -126,7 +143,7 @@ class Processor:
         self.main.pipeline.add(self.videoscale)
         self.queue.link(self.videoscale)
 
-        caps = Gst.Caps.from_string("video/x-raw")
+        caps = Gst.Caps.from_string("video/x-raw, framerate="+self.main.settings['framerate'])
         caps.set_value('width', int(self.main.settings['resolution'][0]))
         caps.set_value('height', int(self.main.settings['resolution'][1]))
         self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)

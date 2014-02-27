@@ -78,10 +78,10 @@ class Mixer:
                     outputtype, props = output, None
 
                 if outputtype == 'simple':
-                    output = SimpleVideoSink(self.tee, self.name, props, self.main)
+                    output = SimpleVideoSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
                 if outputtype == 'udp':
-                    output = UDPSink(self.tee, self.name, props, self.main)
+                    output = UDPSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
 
         self.buttons[0].set_active(True)
@@ -106,7 +106,7 @@ class Mixer:
                 if not props.get('alpha') == None: processor.alpha.set_property('alpha', props.get('alpha'))
                 else: processor.alpha.set_property('alpha', 1)
 
-                caps = Gst.Caps.from_string("video/x-raw")
+                caps = Gst.Caps.from_string("video/x-raw, framerate="+self.main.settings['framerate'])
                 caps.set_value('width', props.get('width') or int(self.main.settings['resolution'][0]))
                 caps.set_value('height', props.get('height') or int(self.main.settings['resolution'][1]))
                 processor.capsfilter.set_property('caps', caps)
@@ -144,31 +144,48 @@ class Main:
         self.pipeline.add(self.audiotee)
         self.audiomixer.link(self.audiotee)
 
-        self.audiofakesink = Gst.ElementFactory.make('fakesink', 'fakesink-audio')
-        self.pipeline.add(self.audiofakesink)
-        self.audiotee.link(self.audiofakesink)
-
         self.mixers = {}
         self.sources = {}
         self.audiosources = {}
+        self.audiosinks = {}
 
         for source in self.settings['sources']:
             name, prop = list(source.items())[0]
             if prop['type'] == 'test':
                 self.sources[name] = TestSource(name, prop, self)
-            if prop['type'] == 'uri':
+            elif prop['type'] == 'uri':
                 self.sources[name] = URISource(name, prop, self)
-            if prop['type'] == 'v4l2':
+            elif prop['type'] == 'v4l2':
                 self.sources[name] = V4L2Source(name, prop, self)
-            if prop['type'] == 'decklink':
+            elif prop['type'] == 'decklink':
                 self.sources[name] = DecklinkSource(name, prop, self)
 
-            if prop['type'] == 'pulse':
+            elif prop['type'] == 'pulse':
                 self.audiosources[name] = PulseaudioSource(name, prop, self)
+            elif prop['type'] == 'jack':
+                self.audiosources[name] = JackSource(name, prop, self)
 
         for mixer in self.settings['mixers']:
             name, prop = list(mixer.items())[0]
-            self.mixers[name] = Mixer(name, prop, self)
+            if name == 'audio':
+                for output in prop['outputs']:
+                    if type(output) == dict: n, p = list(output.items())[0]
+                    else: n, p = output, None
+                    if n == 'udp':
+                        self.audiosinks[name] = UDPSink(self.audiotee, 'audio-'+n, p, self)
+                    elif n == 'simple':
+                        self.audiosinks[name] = SimpleAudioSink(self.audiotee, 'audio-'+n, p, self)
+
+            else:
+                self.mixers[name] = Mixer(name, prop, self)
+
+        if len(self.audiosources) < 1:
+            self.audiomixer.unlink(self.audiotee)
+            self.audiotee.unlink(self.audiofakesink)
+            self.pipeline.remove(self.audiomixer)
+            self.pipeline.remove(self.audiotee)
+            self.pipeline.remove(self.audiofakesink)
+            del self.audiomixer, self.audiotee, self.audiofakesink
 
         for source in self.audiosources.values():
             source.src.link(self.audiomixer)
@@ -192,7 +209,6 @@ class Main:
             try:
                 msg.src.set_window_handle(msg.src.xid)
             except AttributeError:
-                print('not setting xid on sink')
                 pass
 
     def on_error(self, bus, msg):
