@@ -30,7 +30,7 @@ class SimpleAudioSink:
         self.main.pipeline.add(self.audioconvert)
         self.queue.link(self.audioconvert)
 
-        self.autoaudiosink = Gst.ElementFactory.make('jackaudiosink', 'jackaudiosink-' + self.name)
+        self.autoaudiosink = Gst.ElementFactory.make('pulsesink', 'pulsesink-' + self.name)
         self.main.pipeline.add(self.autoaudiosink)
         self.autoaudiosink.set_property('buffer-time', 10000)
         self.audioconvert.link(self.autoaudiosink)

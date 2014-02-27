@@ -181,11 +181,9 @@ class Main:
 
         if len(self.audiosources) < 1:
             self.audiomixer.unlink(self.audiotee)
-            self.audiotee.unlink(self.audiofakesink)
             self.pipeline.remove(self.audiomixer)
             self.pipeline.remove(self.audiotee)
-            self.pipeline.remove(self.audiofakesink)
-            del self.audiomixer, self.audiotee, self.audiofakesink
+            del self.audiomixer, self.audiotee
 
         for source in self.audiosources.values():
             source.src.link(self.audiomixer)
