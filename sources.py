@@ -86,12 +86,22 @@ class DecklinkSource:
         self.videorate.set_property('skip-to-first', True)
         self.src.link(self.videorate)
 
+        self.deinterlace = Gst.ElementFactory.make('deinterlace', 'deinterlace-' + name)
+        self.main.pipeline.add(self.deinterlace)
+        self.videorate.link(self.deinterlace)
+
         caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
+        if self.connection >= 5 and self.connection <= 15:
+            caps.set_property('width', 1920)
+            caps.set_property('height', 1080)
+        elif self.connection >= 16:
+            caps.set_property('width', 1280)
+            caps.set_property('height', 720)
 
         self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
         self.main.pipeline.add(self.capsfilter)
         self.capsfilter.set_property('caps', caps)
-        self.videorate.link(self.capsfilter)
+        self.deinterlace.link(self.capsfilter)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
         self.main.pipeline.add(self.tee)
@@ -130,6 +140,7 @@ class Processor:
         self.source = source
         self.sink = sink
         self.main = main
+        self.name = name
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + name)
         self.main.pipeline.add(self.queue)

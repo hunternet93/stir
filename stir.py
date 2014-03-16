@@ -9,11 +9,8 @@ GObject.threads_init()
 Gst.init(None)
 Gtk.init(None)
 
-# TODO: Figure out why UDPSink causes everything to hang.
-
 class Mixer:
     def __init__(self, name, mixdict, main):
-        # Remember - set zorder in videomixer by set_property('zorder', n) on the videomixer pad
         self.name = name
         self.main = main
 
@@ -44,6 +41,7 @@ class Mixer:
         self.previewqueue.link(self.videoconvert)
 
         self.previewsink = Gst.ElementFactory.make('xvimagesink', 'previewsink-' + name)
+        self.previewsink.set_property('sync', False)
         self.main.pipeline.add(self.previewsink)
         self.videoconvert.link(self.previewsink)
 
@@ -90,7 +88,6 @@ class Mixer:
     def on_button_toggled(self, button, name):
         if button.get_active():
             mix = self.mixes[name]
-            print(self.name + ' switching to mix ' + name)
 
             if not type(mix) == list: mix = []
             for sourcename in self.sources:
@@ -106,16 +103,40 @@ class Mixer:
                 if not props.get('alpha') == None: processor.alpha.set_property('alpha', props.get('alpha'))
                 else: processor.alpha.set_property('alpha', 1)
 
-                caps = Gst.Caps.from_string("video/x-raw, framerate="+self.main.settings['framerate'])
+                if not props.get('chroma') == None:
+                    processor.alpha.set_property('method', 3)
+                    processor.alpha.set_property('target-r', props.get('chroma')[0])
+                    processor.alpha.set_property('target-g', props.get('chroma')[1])
+                    processor.alpha.set_property('target-b', props.get('chroma')[2])
+                else:
+                    processor.alpha.set_property('method', 0)
+                if not props.get('chroma-noise') == None:
+                    processor.alpha.set_property('noise-level', props.get('chroma-noise'))
+                else:
+                    processor.alpha.set_property('noise-level', 2)
+                if not props.get('chroma-black-sensitivity') == None:
+                    processor.alpha.set_property('black-sensitivity', props.get('chroma-black-sensitivity'))
+                else:
+                    processor.alpha.set_property('black-sensitivity', 100)
+                if not props.get('chroma-white-sensitivity') == None:
+                    processor.alpha.set_property('white-sensitivity', props.get('chroma-white-sensitivity'))
+                else:
+                    processor.alpha.set_property('white-sensitivity', 100)
+                if not props.get('angle') == None:
+                    processor.alpha.set_property('angle', props.get('angle'))
+                else:
+                    processor.alpha.set_property('angle', 20)
+
+                caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
                 caps.set_value('width', props.get('width') or int(self.main.settings['resolution'][0]))
                 caps.set_value('height', props.get('height') or int(self.main.settings['resolution'][1]))
+                caps.set_value('format', self.main.settings.get('format') or 'YUV2')
                 processor.capsfilter.set_property('caps', caps)
 
                 processor.sinkpad.set_property('xpos', props.get('x') or 0)
                 processor.sinkpad.set_property('ypos', props.get('y') or 0)
                 if not props.get('z') == None:
-                    processor.sinkpad.set_property('xpos', props.get('z'))
-
+                    processor.sinkpad.set_property('zorder', props.get('z'))
 
 
 class Main:

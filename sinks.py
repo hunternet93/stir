@@ -12,6 +12,7 @@ class SimpleVideoSink:
         self.source.link(self.queue)
 
         self.autovideosink = Gst.ElementFactory.make('autovideosink', 'autovideosink-' + self.name)
+        self.autovideosink.set_property('sync', False)
         self.main.pipeline.add(self.autovideosink)
         self.queue.link(self.autovideosink)
 
@@ -86,4 +87,5 @@ class UDPSink:
         self.main.pipeline.add(self.udpsink)
         self.udpsink.set_property('host', props['host'])
         self.udpsink.set_property('port', props.get('port') or 6473)
+        self.udpsink.set_property('sync', False)
         self.rtppay.link(self.udpsink)
