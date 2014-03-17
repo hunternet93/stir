@@ -8,12 +8,11 @@ sources:
     - test:
         type: test
     - mic:
-        type: jack
+        type: pulse
 
 mixers:
     - audio:
         outputs:
-#            - simple
             - udp:
                 host: 224.1.2.3
                 port: 5556
@@ -34,9 +33,19 @@ mixers:
                     x: 960
                     y: 540
             - Webcam Only
+                - test:
+                    alpha: 1
+                    z: 0
+                - webcam:
+                    alpha: 1
+                    z: 1
             - Test Only:
                 - webcam:
-                    alpha: 0
+                    z:0
+                    alpha: 1
+                - test:
+                    z: 1
+                    alpha: 1
         outputs:
             - udp:
                 host: 224.1.2.3
