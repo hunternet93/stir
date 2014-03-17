@@ -166,6 +166,7 @@ class Processor:
 
         self.alpha = Gst.ElementFactory.make('alpha', 'alpha-' + name)
         self.main.pipeline.add(self.alpha)
+        self.alpha.set_property('prefer-passthrough', True)
         self.rate.link(self.alpha)
 
         alphapad = self.alpha.get_static_pad('src')
