@@ -1,5 +1,5 @@
 import gi
-from gi.repository import GObject, Gst, Gtk, GstVideo, GdkX11
+from gi.repository import GObject, Gst, Gtk, GstVideo, GdkX11, Gdk
 
 class SimpleVideoSink:
     def __init__(self, source, name, props, main):
@@ -8,13 +8,50 @@ class SimpleVideoSink:
         self.main = main
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 10000000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
-        self.autovideosink = Gst.ElementFactory.make('autovideosink', 'autovideosink-' + self.name)
+        self.autovideosink = Gst.ElementFactory.make('autovideosink', 'autovideosink-simple-' + self.name)
         self.autovideosink.set_property('sync', False)
         self.main.pipeline.add(self.autovideosink)
         self.queue.link(self.autovideosink)
+
+
+class FullscreenVideoSink:
+    def __init__(self, source, name, props, main):
+        self.source = source
+        self.name = name
+        self.main = main
+
+        self.window = Gtk.Window(title="Stir - " + self.name + " Output")
+        self.drawingarea = Gtk.DrawingArea()
+        self.window.add(self.drawingarea)
+
+        screen = Gdk.Display.get_default().get_screen(0)
+        self.window.set_screen(screen)
+        rect = screen.get_monitor_geometry(props['screen'])
+        self.window.move(rect.x, rect.y)
+
+        self.window.fullscreen()
+        self.window.set_keep_above(True)
+
+        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 10000000)
+        self.main.pipeline.add(self.queue)
+        self.source.link(self.queue)
+
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
+        self.main.pipeline.add(self.videoconvert)
+        self.queue.link(self.videoconvert)
+
+        self.videosink = Gst.ElementFactory.make('xvimagesink', 'xvimagesink-fullscreen-' + self.name)
+        self.videosink.set_property('sync', False)
+        self.main.pipeline.add(self.videosink)
+        self.videoconvert.link(self.videosink)
+
+        self.window.show_all()
+        self.videosink.xid = self.drawingarea.get_property('window').get_xid()
 
 
 class SimpleAudioSink:
@@ -24,6 +61,7 @@ class SimpleAudioSink:
         self.main = main
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 10000000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -45,6 +83,7 @@ class UDPSink:
         self.main = main
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 10000000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -87,5 +126,6 @@ class UDPSink:
         self.main.pipeline.add(self.udpsink)
         self.udpsink.set_property('host', props['host'])
         self.udpsink.set_property('port', props.get('port') or 6473)
+        if props.get('multicast-iface'): self.udpsink.set_property('multicast-iface', props['iface'])
         self.udpsink.set_property('sync', False)
         self.rtppay.link(self.udpsink)

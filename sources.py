@@ -139,6 +139,7 @@ class Processor:
         self.name = name
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + name)
+        self.queue.set_property('max-size-time', 10000000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -166,7 +167,6 @@ class Processor:
 
         self.alpha = Gst.ElementFactory.make('alpha', 'alpha-' + name)
         self.main.pipeline.add(self.alpha)
-        self.alpha.set_property('prefer-passthrough', True)
         self.rate.link(self.alpha)
 
         alphapad = self.alpha.get_static_pad('src')

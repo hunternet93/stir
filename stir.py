@@ -33,6 +33,7 @@ class Mixer:
         self.videomixer.link(self.tee)
 
         self.previewqueue = Gst.ElementFactory.make('queue', 'previewqueue-' + name)
+        self.previewqueue.set_property('max-size-time', 10000000)
         self.main.pipeline.add(self.previewqueue)
         self.tee.link(self.previewqueue)
 
@@ -77,6 +78,9 @@ class Mixer:
 
                 if outputtype == 'simple':
                     output = SimpleVideoSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
+                    self.outputs.append(output)
+                if outputtype == 'fullscreen':
+                    output = FullscreenVideoSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
                 if outputtype == 'udp':
                     output = UDPSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
@@ -130,7 +134,6 @@ class Mixer:
                 caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
                 caps.set_value('width', props.get('width') or int(self.main.settings['resolution'][0]))
                 caps.set_value('height', props.get('height') or int(self.main.settings['resolution'][1]))
-                caps.set_value('format', self.main.settings.get('format') or 'YUV2')
                 processor.capsfilter.set_property('caps', caps)
 
                 processor.sinkpad.set_property('xpos', props.get('x') or 0)
