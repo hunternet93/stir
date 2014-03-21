@@ -50,6 +50,7 @@ mixers:
             - udp:
                 host: 224.1.2.3
                 port: 5555
+                iface: eth0
                 encoder: h264
                 preset: slow
     - TestB:

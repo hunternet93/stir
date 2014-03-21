@@ -126,5 +126,6 @@ class UDPSink:
         self.main.pipeline.add(self.udpsink)
         self.udpsink.set_property('host', props['host'])
         self.udpsink.set_property('port', props.get('port') or 6473)
+        if props.get('iface'): self.udpsink.set_property('multicast-iface', props['iface'])
         self.udpsink.set_property('sync', False)
         self.rtppay.link(self.udpsink)
