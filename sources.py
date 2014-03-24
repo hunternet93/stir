@@ -53,18 +53,41 @@ class V4L2Source:
         self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
         self.main.pipeline.add(self.videorate)
         self.videorate.set_property('skip-to-first', True)
-        self.videorate.set_property('drop-only', True)
         self.src.link(self.videorate)
 
-        caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
-        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
-        self.main.pipeline.add(self.capsfilter)
-        self.capsfilter.set_property('caps', caps)
-        self.videorate.link(self.capsfilter)
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + name)
+        self.main.pipeline.add(self.videoconvert)
+        self.videorate.link(self.videoconvert)
+
+        self.videoscale = Gst.ElementFactory.make('videoscale', 'videoscale-' + name)
+        self.main.pipeline.add(self.videoscale)
+        self.videoconvert.link(self.videoscale)
+
+        caps = Gst.Caps.from_string("video/x-raw,format=I420,pixel-aspect-ratio=1/1,framerate="+self.main.settings['framerate'])
+        caps.set_value('width', self.main.settings['resolution'][0])
+        caps.set_value('height', self.main.settings['resolution'][1])
+        self.capsfilter1 = Gst.ElementFactory.make('capsfilter', 'capsfilter1-' + name)
+        self.main.pipeline.add(self.capsfilter1)
+        self.capsfilter1.set_property('caps', caps)
+        self.videoscale.link(self.capsfilter1)
+
+        self.intersink = Gst.ElementFactory.make('intervideosink', 'intervideosink-' + name)
+        self.main.pipeline.add(self.intersink)
+        self.intersink.set_property('channel', 'intervideo-' + name)
+        self.intersink.set_property('async', False)
+        self.capsfilter1.link(self.intersink)
+        self.intersrc = Gst.ElementFactory.make('intervideosrc', 'intervideosrc-' + name)
+        self.main.pipeline.add(self.intersrc)
+        self.intersrc.set_property('channel', 'intervideo-' + name)
+
+        self.capsfilter2 = Gst.ElementFactory.make('capsfilter', 'capsfilter2-' + name)
+        self.main.pipeline.add(self.capsfilter2)
+        self.capsfilter2.set_property('caps', caps)
+        self.intersrc.link(self.capsfilter2)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
         self.main.pipeline.add(self.tee)
-        self.capsfilter.link(self.tee)
+        self.capsfilter2.link(self.tee)
 
 
 class DecklinkSource:
@@ -89,19 +112,41 @@ class DecklinkSource:
         self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
         self.main.pipeline.add(self.videorate)
         self.videorate.set_property('skip-to-first', True)
-        self.videorate.set_property('drop-only', True)
         self.deinterlace.link(self.videorate)
 
-        caps = Gst.Caps.from_string("video/x-raw,framerate="+self.main.settings['framerate'])
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + name)
+        self.main.pipeline.add(self.videoconvert)
+        self.videorate.link(self.videoconvert)
 
-        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
-        self.main.pipeline.add(self.capsfilter)
-        self.capsfilter.set_property('caps', caps)
-        self.videorate.link(self.capsfilter)
+        self.videoscale = Gst.ElementFactory.make('videoscale', 'videoscale-' + name)
+        self.main.pipeline.add(self.videoscale)
+        self.videoconvert.link(self.videoscale)
+
+        caps = Gst.Caps.from_string("video/x-raw,format=I420,pixel-aspect-ratio=1/1,framerate="+self.main.settings['framerate'])
+        caps.set_value('width', self.main.settings['resolution'][0])
+        caps.set_value('height', self.main.settings['resolution'][1])
+        self.capsfilter1 = Gst.ElementFactory.make('capsfilter', 'capsfilter1-' + name)
+        self.main.pipeline.add(self.capsfilter1)
+        self.capsfilter1.set_property('caps', caps)
+        self.videoscale.link(self.capsfilter1)
+
+        self.intersink = Gst.ElementFactory.make('intervideosink', 'intervideosink-' + name)
+        self.intersink.set_property('async', False)
+        self.main.pipeline.add(self.intersink)
+        self.intersink.set_property('channel', 'intervideo-' + name)
+        self.capsfilter1.link(self.intersink)
+        self.intersrc = Gst.ElementFactory.make('intervideosrc', 'intervideosrc-' + name)
+        self.main.pipeline.add(self.intersrc)
+        self.intersrc.set_property('channel', 'intervideo-' + name)
+
+        self.capsfilter2 = Gst.ElementFactory.make('capsfilter', 'capsfilter2-' + name)
+        self.main.pipeline.add(self.capsfilter2)
+        self.capsfilter2.set_property('caps', caps)
+        self.intersrc.link(self.capsfilter2)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
         self.main.pipeline.add(self.tee)
-        self.capsfilter.link(self.tee)
+        self.capsfilter2.link(self.tee)
 
 
 class PulseaudioSource:
@@ -162,7 +207,6 @@ class Processor:
         self.rate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
         self.main.pipeline.add(self.rate)
         self.rate.set_property('skip-to-first', True)
-        self.rate.set_property('drop-only', True)
         self.capsfilter.link(self.rate)
 
         self.alpha = Gst.ElementFactory.make('alpha', 'alpha-' + name)
