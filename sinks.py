@@ -96,6 +96,7 @@ class UDPSink:
             self.main.pipeline.add(self.encoder)
             self.encoder.set_property('tune', 'zerolatency')
             self.encoder.set_property('speed-preset', props.get('preset') or 'fast')
+            self.encoder.set_property('bitrate', props.get('bitrate') or 2048)
             self.videoconvert.link(self.encoder)
 
             self.rtppay = Gst.ElementFactory.make('rtph264pay', 'rtph264pay-' + self.name)
