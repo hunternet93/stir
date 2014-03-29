@@ -7,15 +7,10 @@ class SimpleVideoSink:
         self.name = name
         self.main = main
 
-        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 10000000)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
         self.autovideosink = Gst.ElementFactory.make('autovideosink', 'autovideosink-simple-' + self.name)
         self.autovideosink.set_property('sync', False)
         self.main.pipeline.add(self.autovideosink)
-        self.queue.link(self.autovideosink)
+        self.source.link(self.autovideosink)
 
 
 class FullscreenVideoSink:
@@ -36,14 +31,9 @@ class FullscreenVideoSink:
         self.window.fullscreen()
         self.window.set_keep_above(True)
 
-        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 10000000)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
         self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
         self.main.pipeline.add(self.videoconvert)
-        self.queue.link(self.videoconvert)
+        self.source.link(self.videoconvert)
 
         self.videosink = Gst.ElementFactory.make('xvimagesink', 'xvimagesink-fullscreen-' + self.name)
         self.videosink.set_property('sync', False)
@@ -60,14 +50,9 @@ class SimpleAudioSink:
         self.name = name
         self.main = main
 
-        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 10000000)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
         self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
         self.main.pipeline.add(self.audioconvert)
-        self.queue.link(self.audioconvert)
+        self.source.link(self.audioconvert)
 
         self.autoaudiosink = Gst.ElementFactory.make('pulsesink', 'pulsesink-' + self.name)
         self.main.pipeline.add(self.autoaudiosink)
@@ -75,7 +60,7 @@ class SimpleAudioSink:
         self.audioconvert.link(self.autoaudiosink)
 
 
-class UDPSink:
+class TSUDPSink:
     def __init__(self, source, name, props, main):
         # TODO: Eventually add support for different encoders/muxers
         self.source = source
@@ -83,45 +68,42 @@ class UDPSink:
         self.main = main
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 10000000)
+        self.queue.set_property('max-size-time', 10000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
-        if props['encoder'] == 'h264':
-            self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
-            self.main.pipeline.add(self.videoconvert)
-            self.queue.link(self.videoconvert)
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
+        self.main.pipeline.add(self.videoconvert)
+        self.queue.link(self.videoconvert)
 
-            self.encoder = Gst.ElementFactory.make('x264enc', 'x264enc-' + self.name)
-            self.main.pipeline.add(self.encoder)
-            self.encoder.set_property('tune', 'zerolatency')
-            self.encoder.set_property('speed-preset', props.get('preset') or 'fast')
-            self.encoder.set_property('bitrate', props.get('bitrate') or 2048)
-            self.videoconvert.link(self.encoder)
+        # Caps to fix OMXPlayer decoding, OMX doesn't support Y444 format
+        caps = Gst.Caps.from_string("video/x-raw,format=I420")
+        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + self.name)
+        self.main.pipeline.add(self.capsfilter)
+        self.capsfilter.set_property('caps', caps)
+        self.videoconvert.link(self.capsfilter)
 
-            self.rtppay = Gst.ElementFactory.make('rtph264pay', 'rtph264pay-' + self.name)
-            self.main.pipeline.add(self.rtppay)
-            self.encoder.link(self.rtppay)
-        elif props['encoder'] == 'aac':
+        self.encoder = Gst.ElementFactory.make('x264enc', 'x264enc-' + self.name)
+        self.main.pipeline.add(self.encoder)
+        self.encoder.set_property('tune', 'zerolatency')
+        self.encoder.set_property('speed-preset', props.get('preset') or 'fast')
+        self.encoder.set_property('bitrate', props.get('bitrate') or 2048)
+        self.capsfilter.link(self.encoder)
+
+        self.muxer = Gst.ElementFactory.make('mpegtsmux', 'mpegtsmux-' + self.name)
+        self.main.pipeline.add(self.muxer)
+        self.encoder.link(self.muxer)
+
+        if props.get('audio'):
             self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
             self.main.pipeline.add(self.audioconvert)
-            self.queue.link(self.audioconvert)
+            self.main.audiotee.link(self.audioconvert)
 
-            self.encoder = Gst.ElementFactory.make('voaacenc', 'voaacenc-' + self.name)
-            self.main.pipeline.add(self.encoder)
-            self.audioconvert.link(self.encoder)
+            self.faac = Gst.ElementFactory.make('faac', 'faac-' + self.name)
+            self.main.pipeline.add(self.faac)
+            self.audioconvert.link(self.faac)
 
-            self.rtppay = Gst.ElementFactory.make('rtpmp4apay', 'rtpmp4apay-' + self.name)
-            self.main.pipeline.add(self.rtppay)
-            self.encoder.link(self.rtppay)
-        elif props['encoder'] == 'l16':
-            self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
-            self.main.pipeline.add(self.audioconvert)
-            self.queue.link(self.audioconvert)
-
-            self.rtppay = Gst.ElementFactory.make('rtpL16pay', 'rtpL16pay-' + self.name)
-            self.main.pipeline.add(self.rtppay)
-            self.audioconvert.link(self.rtppay)
+            self.faac.link(self.muxer)
 
         self.udpsink = Gst.ElementFactory.make('udpsink', 'udpsink-' + self.name)
         self.main.pipeline.add(self.udpsink)
@@ -129,4 +111,4 @@ class UDPSink:
         self.udpsink.set_property('port', props.get('port') or 6473)
         if props.get('iface'): self.udpsink.set_property('multicast-iface', props['iface'])
         self.udpsink.set_property('sync', False)
-        self.rtppay.link(self.udpsink)
+        self.muxer.link(self.udpsink)

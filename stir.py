@@ -33,7 +33,7 @@ class Mixer:
         self.videomixer.link(self.tee)
 
         self.previewqueue = Gst.ElementFactory.make('queue', 'previewqueue-' + name)
-        self.previewqueue.set_property('max-size-time', 10000000)
+        self.previewqueue.set_property('max-size-time', 1)
         self.main.pipeline.add(self.previewqueue)
         self.tee.link(self.previewqueue)
 
@@ -83,7 +83,7 @@ class Mixer:
                     output = FullscreenVideoSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
                 if outputtype == 'udp':
-                    output = UDPSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
+                    output = TSUDPSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
 
         self.buttons[0].set_active(True)

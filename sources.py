@@ -183,18 +183,9 @@ class Processor:
         self.main = main
         self.name = name
 
-        self.queue = Gst.ElementFactory.make('queue', 'queue-' + name)
-        self.queue.set_property('max-size-time', 10000000)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
-        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + name)
-        self.main.pipeline.add(self.videoconvert)
-        self.queue.link(self.videoconvert)
-
         self.videoscale = Gst.ElementFactory.make('videoscale', 'scale-' + name)
         self.main.pipeline.add(self.videoscale)
-        self.videoconvert.link(self.videoscale)
+        self.source.link(self.videoscale)
 
         caps = Gst.Caps.from_string("video/x-raw, framerate="+self.main.settings['framerate'])
         caps.set_value('width', int(self.main.settings['resolution'][0]))
@@ -204,14 +195,9 @@ class Processor:
         self.capsfilter.set_property('caps', caps)
         self.videoscale.link(self.capsfilter)
 
-        self.rate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
-        self.main.pipeline.add(self.rate)
-        self.rate.set_property('skip-to-first', True)
-        self.capsfilter.link(self.rate)
-
         self.alpha = Gst.ElementFactory.make('alpha', 'alpha-' + name)
         self.main.pipeline.add(self.alpha)
-        self.rate.link(self.alpha)
+        self.capsfilter.link(self.alpha)
 
         alphapad = self.alpha.get_static_pad('src')
         self.sinkpad = self.sink.get_compatible_pad(alphapad, None)
