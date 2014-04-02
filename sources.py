@@ -111,7 +111,6 @@ class DecklinkSource:
 
         self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
         self.main.pipeline.add(self.videorate)
-        self.videorate.set_property('skip-to-first', True)
         self.deinterlace.link(self.videorate)
 
         self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + name)
