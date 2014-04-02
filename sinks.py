@@ -30,6 +30,9 @@ class FullscreenVideoSink:
 
         self.window.fullscreen()
         self.window.set_keep_above(True)
+        self.window.set_accept_focus(False)
+        self.window.set_skip_pager_hint(True)
+        self.window.set_skip_taskbar_hint(True)
 
         self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
         self.main.pipeline.add(self.videoconvert)
