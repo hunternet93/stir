@@ -121,7 +121,7 @@ class DecklinkSource:
         self.main.pipeline.add(self.videoscale)
         self.videoconvert.link(self.videoscale)
 
-        caps = Gst.Caps.from_string("video/x-raw,format=I420,pixel-aspect-ratio=1/1,framerate="+self.main.settings['framerate'])
+        caps = Gst.Caps.from_string("video/x-raw,format=I420,pixel-aspect-ratio=1/1,interlace-mode=progressive,framerate="+self.main.settings['framerate'])
         caps.set_value('width', self.main.settings['resolution'][0])
         caps.set_value('height', self.main.settings['resolution'][1])
         self.capsfilter1 = Gst.ElementFactory.make('capsfilter', 'capsfilter1-' + name)
@@ -182,9 +182,14 @@ class Processor:
         self.main = main
         self.name = name
 
+        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 100000)
+        self.main.pipeline.add(self.queue)
+        self.source.link(self.queue)
+
         self.videoscale = Gst.ElementFactory.make('videoscale', 'scale-' + name)
         self.main.pipeline.add(self.videoscale)
-        self.source.link(self.videoscale)
+        self.queue.link(self.videoscale)
 
         caps = Gst.Caps.from_string("video/x-raw, framerate="+self.main.settings['framerate'])
         caps.set_value('width', int(self.main.settings['resolution'][0]))

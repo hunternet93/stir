@@ -33,7 +33,7 @@ class Mixer:
         self.videomixer.link(self.tee)
 
         self.previewqueue = Gst.ElementFactory.make('queue', 'previewqueue-' + name)
-        self.previewqueue.set_property('max-size-time', 1)
+        self.previewqueue.set_property('max-size-time', 100000)
         self.main.pipeline.add(self.previewqueue)
         self.tee.link(self.previewqueue)
 
@@ -43,6 +43,7 @@ class Mixer:
 
         self.previewsink = Gst.ElementFactory.make('xvimagesink', 'previewsink-' + name)
         self.previewsink.set_property('sync', False)
+        self.previewsink.set_property('async', False)
         self.main.pipeline.add(self.previewsink)
         self.videoconvert.link(self.previewsink)
 

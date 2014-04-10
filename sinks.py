@@ -1,4 +1,4 @@
-import gi
+import time, gi
 from gi.repository import GObject, Gst, Gtk, GstVideo, GdkX11, Gdk
 
 class SimpleVideoSink:
@@ -7,10 +7,14 @@ class SimpleVideoSink:
         self.name = name
         self.main = main
 
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-simple-' + self.name)
+        self.main.pipeline.add(self.videoconvert)
+        self.source.link(self.videoconvert)
+
         self.autovideosink = Gst.ElementFactory.make('autovideosink', 'autovideosink-simple-' + self.name)
         self.autovideosink.set_property('sync', False)
         self.main.pipeline.add(self.autovideosink)
-        self.source.link(self.autovideosink)
+        self.videoconvert.link(self.autovideosink)
 
 
 class FullscreenVideoSink:
@@ -34,12 +38,18 @@ class FullscreenVideoSink:
         self.window.set_skip_pager_hint(True)
         self.window.set_skip_taskbar_hint(True)
 
-        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
+        self.queue = Gst.ElementFactory.make('queue', 'queue-fullscreen-' + self.name)
+        self.queue.set_property('max-size-time', 10000)
+        self.main.pipeline.add(self.queue)
+        self.source.link(self.queue)
+
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-fullscreen-' + self.name)
         self.main.pipeline.add(self.videoconvert)
-        self.source.link(self.videoconvert)
+        self.queue.link(self.videoconvert)
 
         self.videosink = Gst.ElementFactory.make('xvimagesink', 'xvimagesink-fullscreen-' + self.name)
         self.videosink.set_property('sync', False)
+        self.videosink.set_property('async', False)
         self.main.pipeline.add(self.videosink)
         self.videoconvert.link(self.videosink)
 
@@ -71,7 +81,7 @@ class TSUDPSink:
         self.main = main
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 10000)
+        self.queue.set_property('max-size-time', 1000000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -108,10 +118,22 @@ class TSUDPSink:
 
             self.faac.link(self.muxer)
 
+        self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
+        self.main.pipeline.add(self.tee)
+        self.muxer.link(self.tee)
+
+        if props.get('filesinkdir'):
+            self.filesink = Gst.ElementFactory.make('filesink', 'filesink-' + self.name)
+            self.main.pipeline.add(self.filesink)
+            self.filesink.set_property('location', props['filesinkdir'] + '/Stir - ' + time.strftime('%Y-%m-%d %I:%M %p') + '.ts')
+            self.filesink.set_property('sync', False)
+            self.filesink.set_property('async', False)
+            self.tee.link(self.filesink)
+
         self.udpsink = Gst.ElementFactory.make('udpsink', 'udpsink-' + self.name)
         self.main.pipeline.add(self.udpsink)
         self.udpsink.set_property('host', props['host'])
         self.udpsink.set_property('port', props.get('port') or 6473)
         if props.get('iface'): self.udpsink.set_property('multicast-iface', props['iface'])
         self.udpsink.set_property('sync', False)
-        self.muxer.link(self.udpsink)
+        self.tee.link(self.udpsink)
