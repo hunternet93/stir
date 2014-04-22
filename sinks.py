@@ -81,7 +81,7 @@ class TSUDPSink:
         self.main = main
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 1000000)
+        self.queue.set_property('max-size-time', 2000000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -101,6 +101,8 @@ class TSUDPSink:
         self.encoder.set_property('tune', 'zerolatency')
         self.encoder.set_property('speed-preset', props.get('preset') or 'fast')
         self.encoder.set_property('bitrate', props.get('bitrate') or 2048)
+        if props.get('qp'): self.encoder.set_property('quantizer', props['qp'])
+        if props.get('keyint'): self.encoder.set_property('key-int-max', props['keyint'])
         self.capsfilter.link(self.encoder)
 
         self.muxer = Gst.ElementFactory.make('mpegtsmux', 'mpegtsmux-' + self.name)

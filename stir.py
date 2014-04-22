@@ -26,6 +26,7 @@ class Mixer:
         self.box.pack_start(self.previewarea, True, True, 8)
 
         self.videomixer = Gst.ElementFactory.make('videomixer', 'videomixer-' + name)
+        self.videomixer.set_property('background', 1)
         self.main.pipeline.add(self.videomixer)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
