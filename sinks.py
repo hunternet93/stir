@@ -74,63 +74,14 @@ class SimpleAudioSink:
 
 
 class TSUDPSink:
-    def __init__(self, source, name, props, main):
+    def __init__(self, encoders, name, props, main):
         # TODO: Eventually add support for different encoders/muxers
-        self.source = source
+        self.encoders = encoders
         self.name = name
         self.main = main
 
-        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 2000000)
-        self.main.pipeline.add(self.queue)
-        self.source.link(self.queue)
-
-        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
-        self.main.pipeline.add(self.videoconvert)
-        self.queue.link(self.videoconvert)
-
-        # Caps to fix OMXPlayer decoding, OMX doesn't support Y444 format
-        caps = Gst.Caps.from_string("video/x-raw,format=I420")
-        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + self.name)
-        self.main.pipeline.add(self.capsfilter)
-        self.capsfilter.set_property('caps', caps)
-        self.videoconvert.link(self.capsfilter)
-
-        self.encoder = Gst.ElementFactory.make('x264enc', 'x264enc-' + self.name)
-        self.main.pipeline.add(self.encoder)
-        self.encoder.set_property('tune', 'zerolatency')
-        self.encoder.set_property('speed-preset', props.get('preset') or 'fast')
-        self.encoder.set_property('bitrate', props.get('bitrate') or 2048)
-        if props.get('qp'): self.encoder.set_property('quantizer', props['qp'])
-        if props.get('keyint'): self.encoder.set_property('key-int-max', props['keyint'])
-        self.capsfilter.link(self.encoder)
-
         self.muxer = Gst.ElementFactory.make('mpegtsmux', 'mpegtsmux-' + self.name)
         self.main.pipeline.add(self.muxer)
-        self.encoder.link(self.muxer)
-
-        if props.get('audio'):
-            self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
-            self.main.pipeline.add(self.audioconvert)
-            self.main.audiotee.link(self.audioconvert)
-
-            self.faac = Gst.ElementFactory.make('faac', 'faac-' + self.name)
-            self.main.pipeline.add(self.faac)
-            self.audioconvert.link(self.faac)
-
-            self.faac.link(self.muxer)
-
-        self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
-        self.main.pipeline.add(self.tee)
-        self.muxer.link(self.tee)
-
-        if props.get('filesinkdir'):
-            self.filesink = Gst.ElementFactory.make('filesink', 'filesink-' + self.name)
-            self.main.pipeline.add(self.filesink)
-            self.filesink.set_property('location', props['filesinkdir'] + '/Stir - ' + time.strftime('%Y-%m-%d %I:%M %p') + '.ts')
-            self.filesink.set_property('sync', False)
-            self.filesink.set_property('async', False)
-            self.tee.link(self.filesink)
 
         self.udpsink = Gst.ElementFactory.make('udpsink', 'udpsink-' + self.name)
         self.main.pipeline.add(self.udpsink)
@@ -138,4 +89,74 @@ class TSUDPSink:
         self.udpsink.set_property('port', props.get('port') or 6473)
         if props.get('iface'): self.udpsink.set_property('multicast-iface', props['iface'])
         self.udpsink.set_property('sync', False)
-        self.tee.link(self.udpsink)
+        self.muxer.link(self.udpsink)
+
+        for encoder in props.get('encoders'):
+            print('tsudp linking to', encoder)
+            encoders[encoder].tee.link(self.muxer)
+
+
+class TSFileSink:
+    def __init__(self, encoders, name, props, main):
+        self.name, self.main = name, main
+        self.queues = []
+
+        self.muxer = Gst.ElementFactory.make('mpegtsmux', 'mpegtsmux-' + self.name)
+        self.main.pipeline.add(self.muxer)
+
+        self.filesink = Gst.ElementFactory.make('filesink', 'filesink-' + self.name)
+        self.main.pipeline.add(self.filesink)
+        self.filesink.set_property('location', props['directory'] + '/Stir - ' + time.strftime('%Y-%m-%d %I:%M:%S %p') + '.ts')
+        self.filesink.set_property('sync', False)
+        self.filesink.set_property('async', False)
+        self.muxer.link(self.filesink)
+
+        self.encoders = []
+        for encoder in props.get('encoders'): self.encoders.append(encoders[encoder])
+        for encoder in self.encoders:
+            queue = Gst.ElementFactory.make('queue', 'queue' + str(len(self.queues)) + '-' + self.name)
+            self.main.pipeline.add(queue)
+            queue.link(self.muxer)
+            self.queues.append(queue)
+            encoder.tee.link(queue)
+
+        print(self.main.pipeline.get_state(5))
+
+    def stop(self):
+        self.muxer.get_static_pad('sink').send_event(Gst.Event.new_eos())
+        for queue in self.queues:
+            queue.set_state(Gst.State.NULL)
+            queue.unlink(self.muxer)
+            self.main.pipeline.remove(queue)
+
+        self.muxer.set_state(Gst.State.NULL)
+        self.muxer.unlink(self.filesink)
+        self.main.pipeline.remove(self.muxer)
+
+        self.filesink.set_state(Gst.State.NULL)
+        self.main.pipeline.remove(self.filesink)
+
+class TSRecord:
+    def __init__(self, encoders, name, props, main, box):
+        self.encoders, self.name, self.props, self.main, self.box = encoders, name, props, main, box
+        self.button = Gtk.ToggleButton.new_with_label('Record')
+        self.button.connect('toggled', self.on_button_toggled)
+        self.box.pack_start(self.button, False, False, 4)
+        self.label = Gtk.Label()
+        self.label.set_markup("<b>Not Recording</b>")
+        self.box.pack_start(self.label, False, False, 4)
+
+        self.tsfilesink = None
+
+    def on_button_toggled(self, button):
+        print('onbuttontoggled')
+        if button.get_active():
+            self.tsfilesink = TSFileSink(self.encoders, self.name, self.props, self.main)
+            self.button.set_label('Stop')
+            self.label.set_markup("Recording to " + self.tsfilesink.filesink.get_property('location'))
+
+        else:
+            self.tsfilesink.stop()
+            self.tsfilesink = None
+            self.button.set_label('Record')
+            self.label.set_markup("<b>Not Recording</b>")

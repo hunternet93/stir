@@ -4,6 +4,7 @@ gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst, Gtk, GstVideo, GdkX11
 from sources import *
 from sinks import *
+from encoders import *
 
 GObject.threads_init()
 Gst.init(None)
@@ -70,6 +71,15 @@ class Mixer:
             button.connect('toggled', self.on_button_toggled, name)
             self.buttons.append(button)
 
+        self.encoders = {}
+        if mixdict.get('encoders'):
+            for encoder in mixdict['encoders']:
+                name, props = list(encoder.items())[0]
+                if props['type'] == 'h264':
+                    self.encoders[name] = H264Encoder(self.tee, self.name + '-encoder-' + name, props, self.main)
+                if props['type'] == 'aac':
+                    self.encoders[name] = AACEncoder(self.main.audiotee, self.name + '-encoder-' + name, props, self.main)
+
         self.outputs = []
         if mixdict.get('outputs'):
             for output in mixdict['outputs']:
@@ -84,9 +94,14 @@ class Mixer:
                 if outputtype == 'fullscreen':
                     output = FullscreenVideoSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
-                if outputtype == 'udp':
-                    output = TSUDPSink(self.tee, self.name + str(len(self.outputs)), props, self.main)
+                if outputtype == 'tsudp':
+                    output = TSUDPSink(self.encoders, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
+                if outputtype == 'tsrecord':
+                    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+                    self.box.pack_start(box, False, False, 4)
+                    self.box.reorder_child(box, 1)
+                    self.outputs.append(TSRecord(self.encoders, self.name + str(len(self.outputs)), props, self.main, box))
 
         self.buttons[0].set_active(True)
         self.on_button_toggled(self.buttons[0], self.buttons[0].get_label())
@@ -152,7 +167,7 @@ class Main:
         self.window.connect('destroy', self.quit)
         self.window.maximize()
 
-        self.mixersbox = Gtk.Box()
+        self.mixersbox = Gtk.Box(homogeneous = True)
         self.window.add(self.mixersbox)
 
         self.pipeline = Gst.Pipeline()
