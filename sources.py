@@ -155,12 +155,45 @@ class PulseaudioSource:
         self.device = props.get('device')
         self.main = main
 
-        self.src = Gst.ElementFactory.make('pulsesrc', 'pulsesrc-' + name)
+        self.pulsesrc = Gst.ElementFactory.make('pulsesrc', 'pulsesrc-' + name)
+        self.main.pipeline.add(self.pulsesrc)
+        if self.device: self.pulsesrc.set_property('device', self.device)
+        self.pulsesrc.set_property('client-name', "Stir - Video Mixer")
+        self.pulsesrc.set_property('buffer-time', 10000)
+        
+        # Naming the below variable 'src' is due to a lack for foresight, I'll restructure the whole think eventually
+        self.src = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
         self.main.pipeline.add(self.src)
-        if self.device: self.src.set_property('device', self.device)
-        self.src.set_property('client-name', "Stir - Video Mixer")
-        self.src.set_property('buffer-time', 10000)
+        self.pulsesrc.link(self.src)
+        caps = Gst.Caps.from_string("audio/x-raw")
+        if props.get('channels'):
+            caps.set_value('channels', props['channels'])
+        self.src.set_property('caps', caps)
 
+class ALSASource:
+    def __init__(self, name, props, main):
+        self.name = name
+        self.props = props
+        self.device = props.get('device')
+        self.main = main
+
+        self.alsasrc = Gst.ElementFactory.make('alsasrc', 'alsasrc-' + name)
+        self.main.pipeline.add(self.alsasrc)
+        if self.device: self.alsasrc.set_property('device', self.device)
+        self.alsasrc.set_property('buffer-time', 50000)
+        
+        self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
+        self.main.pipeline.add(self.capsfilter)
+        self.alsasrc.link(self.capsfilter)
+        caps = Gst.Caps.from_string("audio/x-raw")
+        if props.get('channels'):
+            caps.set_value('channels', props['channels'])
+        self.capsfilter.set_property('caps', caps)
+
+        self.src = Gst.ElementFactory.make('audioamplify', 'audioamplify-' + name)
+        self.main.pipeline.add(self.src)
+        self.capsfilter.link(self.src)
+        self.src.set_property('amplification', props.get('amplification') or 1.0)
 
 class JackSource:
     def __init__(self, name, props, main):
