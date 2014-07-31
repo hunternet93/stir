@@ -126,7 +126,8 @@ class TSFileSink:
         self.muxer.get_static_pad('sink').send_event(Gst.Event.new_eos())
         for queue in self.queues:
             queue.set_state(Gst.State.NULL)
-            queue.unlink(self.muxer)
+            encpad = queue.get_static_pad('sink').get_peer()
+            encpad.get_parent_element().remove_pad(encpad)
             self.main.pipeline.remove(queue)
 
         self.muxer.set_state(Gst.State.NULL)
