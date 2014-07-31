@@ -118,7 +118,11 @@ class TSUDPSink:
             self.main.pipeline.add(self.faac)
             self.audioconvert.link(self.faac)
 
-            self.faac.link(self.muxer)
+            self.aacparse = Gst.ElementFactory.make('aacparse', 'aacparse-' + self.name)
+            self.main.pipeline.add(self.aacparse)
+            self.faac.link(self.aacparse)
+
+            self.aacparse.link(self.muxer)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
         self.main.pipeline.add(self.tee)
