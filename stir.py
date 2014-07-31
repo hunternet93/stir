@@ -183,14 +183,11 @@ class Main:
         self.window.connect('destroy', self.quit)
         self.window.maximize()
 
-
-
         self.accel = Gtk.AccelGroup()
         self.window.add_accel_group(self.accel)
 
-        self.mixersbox = Gtk.Box()
-
         self.mixersbox = Gtk.Box(homogeneous = True)
+        self.window.add(self.mixersbox)
 
         self.pipeline = Gst.Pipeline()
 

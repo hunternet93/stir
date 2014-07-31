@@ -91,9 +91,13 @@ class TSUDPSink:
         self.udpsink.set_property('sync', False)
         self.muxer.link(self.udpsink)
 
+        self.queues = []
         for encoder in props.get('encoders'):
-            print('tsudp linking to', encoder)
-            encoders[encoder].tee.link(self.muxer)
+            queue = Gst.ElementFactory.make('queue', 'queue'+str(len(self.queues)) + '-' + self.name)
+            self.main.pipeline.add(queue)
+            queue.link(self.muxer)
+            self.queues.append(queue)
+            encoders[encoder].tee.link(queue)
 
 
 class TSFileSink:
@@ -114,28 +118,34 @@ class TSFileSink:
         self.encoders = []
         for encoder in props.get('encoders'): self.encoders.append(encoders[encoder])
         for encoder in self.encoders:
+            print('filesink linking to', encoder.name)
             queue = Gst.ElementFactory.make('queue', 'queue' + str(len(self.queues)) + '-' + self.name)
             self.main.pipeline.add(queue)
             queue.link(self.muxer)
             self.queues.append(queue)
-            encoder.tee.link(queue)
+            print(encoder.tee.link(queue))
+            queue.set_state(Gst.State.PLAYING)
 
-        print(self.main.pipeline.get_state(5))
+        self.muxer.set_state(Gst.State.PLAYING)
+        self.filesink.set_state(Gst.State.PLAYING)
+
 
     def stop(self):
-        self.muxer.get_static_pad('sink').send_event(Gst.Event.new_eos())
+        self.filesink.get_static_pad('sink').send_event(Gst.Event.new_eos())
         for queue in self.queues:
-            queue.set_state(Gst.State.NULL)
             encpad = queue.get_static_pad('sink').get_peer()
             encpad.get_parent_element().remove_pad(encpad)
+            muxpad = queue.get_static_pad('src').get_peer()
+            self.muxer.remove_pad(muxpad)
+
             self.main.pipeline.remove(queue)
+            queue.set_state(Gst.State.NULL)
 
-        self.muxer.set_state(Gst.State.NULL)
-        self.muxer.unlink(self.filesink)
         self.main.pipeline.remove(self.muxer)
+        self.muxer.set_state(Gst.State.NULL)
 
-        self.filesink.set_state(Gst.State.NULL)
         self.main.pipeline.remove(self.filesink)
+        self.filesink.set_state(Gst.State.NULL)
 
 class TSRecord:
     def __init__(self, encoders, name, props, main, box):
