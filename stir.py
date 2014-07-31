@@ -59,16 +59,31 @@ class Mixer:
         self.buttons = []
         for mix in mixdict['mixes']:
             if type(mix) == dict:
-                name, prop = list(mix.items())[0]
+                name, props = list(mix.items())[0]
             else:
-                name, prop = mix, None
-            self.mixes[name] = prop
+                name, props = mix, None
+            self.mixes[name] = props
 
-            try: button = Gtk.RadioButton.new_with_label_from_widget(self.buttons[0], name)
-            except IndexError: button = Gtk.RadioButton.new_with_label_from_widget(None, name)
+            for prop in props:
+                if not prop.get('key') == None:
+                    key = str(prop['key'])
+                    label = '(' + key + ') ' + name
+                    break
+                else:
+                    key = None
+                    label = name
+                    break
+
+            try: button = Gtk.RadioButton.new_with_label_from_widget(self.buttons[0], label)
+            except IndexError: button = Gtk.RadioButton.new_with_label_from_widget(None, label)
             self.box.pack_start(button, False, False, 4)
 
+            button.sname = name
             button.connect('toggled', self.on_button_toggled, name)
+            if key:
+                kv = getattr(Gdk, 'KEY_' + key)
+                button.add_accelerator('activate', self.main.accel, kv, Gdk.ModifierType(0), Gtk.AccelFlags(1))
+
             self.buttons.append(button)
 
         self.encoders = {}
@@ -104,7 +119,7 @@ class Mixer:
                     self.outputs.append(TSRecord(self.encoders, self.name + str(len(self.outputs)), props, self.main, box))
 
         self.buttons[0].set_active(True)
-        self.on_button_toggled(self.buttons[0], self.buttons[0].get_label())
+        self.on_button_toggled(self.buttons[0], self.buttons[0].sname)
 
     def on_button_toggled(self, button, name):
         if button.get_active():
@@ -112,6 +127,7 @@ class Mixer:
 
             if not type(mix) == list: mix = []
             for sourcename in self.sources:
+                if sourcename == 'key': continue
                 props = {}
                 for sourcedict in mix:
                     n, p = list(sourcedict.items())[0]
@@ -167,8 +183,14 @@ class Main:
         self.window.connect('destroy', self.quit)
         self.window.maximize()
 
+
+
+        self.accel = Gtk.AccelGroup()
+        self.window.add_accel_group(self.accel)
+
+        self.mixersbox = Gtk.Box()
+
         self.mixersbox = Gtk.Box(homogeneous = True)
-        self.window.add(self.mixersbox)
 
         self.pipeline = Gst.Pipeline()
 
@@ -203,6 +225,8 @@ class Main:
 
             elif prop['type'] == 'pulse':
                 self.audiosources[name] = PulseaudioSource(name, prop, self)
+            elif prop['type'] == 'alsa':
+                self.audiosources[name] = ALSASource(name, prop, self)
             elif prop['type'] == 'jack':
                 self.audiosources[name] = JackSource(name, prop, self)
 
