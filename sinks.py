@@ -47,7 +47,7 @@ class FullscreenVideoSink:
         self.main.pipeline.add(self.videoconvert)
         self.queue.link(self.videoconvert)
 
-        self.videosink = Gst.ElementFactory.make('xvimagesink', 'xvimagesink-fullscreen-' + self.name)
+        self.videosink = Gst.ElementFactory.make('xvimagesink', 'glimagesink-fullscreen-' + self.name)
         self.videosink.set_property('sync', False)
         self.videosink.set_property('async', False)
         self.main.pipeline.add(self.videosink)

@@ -99,53 +99,17 @@ class DecklinkSource:
         self.connection = props['connection']
         self.main = main
 
-        self.src = Gst.ElementFactory.make('decklinksrc', 'decklinksrc-' + name)
+        self.src = Gst.ElementFactory.make('decklinkvideosrc', 'decklinkvideosrc-' + name)
         self.main.pipeline.add(self.src)
+        self.src.set_property('buffer-size', 1)
+        self.src.set_property('do-timestamp', True)
         self.src.set_property('device-number', self.device)
         self.src.set_property('connection', self.connection)
         self.src.set_property('mode', self.mode)
 
-        self.deinterlace = Gst.ElementFactory.make('deinterlace', 'deinterlace-' + name)
-        self.main.pipeline.add(self.deinterlace)
-        self.src.link(self.deinterlace)
-
-        self.videorate = Gst.ElementFactory.make('videorate', 'videorate-' + name)
-        self.main.pipeline.add(self.videorate)
-        self.deinterlace.link(self.videorate)
-
-        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + name)
-        self.main.pipeline.add(self.videoconvert)
-        self.videorate.link(self.videoconvert)
-
-        self.videoscale = Gst.ElementFactory.make('videoscale', 'videoscale-' + name)
-        self.main.pipeline.add(self.videoscale)
-        self.videoconvert.link(self.videoscale)
-
-        caps = Gst.Caps.from_string("video/x-raw,format=I420,pixel-aspect-ratio=1/1,interlace-mode=progressive,framerate="+self.main.settings['framerate'])
-        caps.set_value('width', self.main.settings['resolution'][0])
-        caps.set_value('height', self.main.settings['resolution'][1])
-        self.capsfilter1 = Gst.ElementFactory.make('capsfilter', 'capsfilter1-' + name)
-        self.main.pipeline.add(self.capsfilter1)
-        self.capsfilter1.set_property('caps', caps)
-        self.videoscale.link(self.capsfilter1)
-
-        self.intersink = Gst.ElementFactory.make('intervideosink', 'intervideosink-' + name)
-        self.intersink.set_property('async', False)
-        self.main.pipeline.add(self.intersink)
-        self.intersink.set_property('channel', 'intervideo-' + name)
-        self.capsfilter1.link(self.intersink)
-        self.intersrc = Gst.ElementFactory.make('intervideosrc', 'intervideosrc-' + name)
-        self.main.pipeline.add(self.intersrc)
-        self.intersrc.set_property('channel', 'intervideo-' + name)
-
-        self.capsfilter2 = Gst.ElementFactory.make('capsfilter', 'capsfilter2-' + name)
-        self.main.pipeline.add(self.capsfilter2)
-        self.capsfilter2.set_property('caps', caps)
-        self.intersrc.link(self.capsfilter2)
-
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + name)
         self.main.pipeline.add(self.tee)
-        self.capsfilter2.link(self.tee)
+        self.src.link(self.tee)
 
 
 class PulseaudioSource:
@@ -216,13 +180,21 @@ class Processor:
         self.name = name
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 100000)
+        self.queue.set_property('max-size-time', 1000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
+        self.deinterlace = Gst.ElementFactory.make('deinterlace', 'deinterlace-' + name)
+        self.main.pipeline.add(self.deinterlace)
+        self.queue.link(self.deinterlace)
+
+        self.videorate = Gst.ElementFactory.make('videorate', 'rate-' + name)
+        self.main.pipeline.add(self.videorate)
+        self.deinterlace.link(self.videorate)
+
         self.videoscale = Gst.ElementFactory.make('videoscale', 'scale-' + name)
         self.main.pipeline.add(self.videoscale)
-        self.queue.link(self.videoscale)
+        self.videorate.link(self.videoscale)
 
         caps = Gst.Caps.from_string("video/x-raw, framerate="+self.main.settings['framerate'])
         caps.set_value('width', int(self.main.settings['resolution'][0]))
@@ -232,9 +204,13 @@ class Processor:
         self.capsfilter.set_property('caps', caps)
         self.videoscale.link(self.capsfilter)
 
+        self.videobox = Gst.ElementFactory.make('videobox', 'videobox-' + name)
+        self.main.pipeline.add(self.videobox)
+        self.capsfilter.link(self.videobox)
+
         self.alpha = Gst.ElementFactory.make('alpha', 'alpha-' + name)
         self.main.pipeline.add(self.alpha)
-        self.capsfilter.link(self.alpha)
+        self.videobox.link(self.alpha)
 
         alphapad = self.alpha.get_static_pad('src')
         self.sinkpad = self.sink.get_compatible_pad(alphapad, None)

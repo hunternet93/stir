@@ -169,6 +169,11 @@ class Mixer:
                 caps.set_value('height', props.get('height') or int(self.main.settings['resolution'][1]))
                 processor.capsfilter.set_property('caps', caps)
 
+                processor.videobox.set_property('top', props.get('top') or 0)
+                processor.videobox.set_property('bottom', props.get('bottom') or 0)
+                processor.videobox.set_property('left', props.get('left') or 0)
+                processor.videobox.set_property('right', props.get('right') or 0)
+
                 processor.sinkpad.set_property('xpos', props.get('x') or 0)
                 processor.sinkpad.set_property('ypos', props.get('y') or 0)
                 if not props.get('z') == None:
