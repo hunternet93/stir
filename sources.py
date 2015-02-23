@@ -101,7 +101,7 @@ class DecklinkSource:
 
         self.src = Gst.ElementFactory.make('decklinkvideosrc', 'decklinkvideosrc-' + name)
         self.main.pipeline.add(self.src)
-        self.src.set_property('buffer-size', 1)
+        self.src.set_property('buffer-size', 5)
         self.src.set_property('do-timestamp', True)
         self.src.set_property('device-number', self.device)
         self.src.set_property('connection', self.connection)
@@ -144,7 +144,7 @@ class ALSASource:
         self.alsasrc = Gst.ElementFactory.make('alsasrc', 'alsasrc-' + name)
         self.main.pipeline.add(self.alsasrc)
         if self.device: self.alsasrc.set_property('device', self.device)
-        self.alsasrc.set_property('buffer-time', 50000)
+        if props.get('buffer-time'): self.alsasrc.set_property('buffer-time', props['buffer-time'])
         
         self.capsfilter = Gst.ElementFactory.make('capsfilter', 'capsfilter-' + name)
         self.main.pipeline.add(self.capsfilter)
@@ -154,10 +154,18 @@ class ALSASource:
             caps.set_value('channels', props['channels'])
         self.capsfilter.set_property('caps', caps)
 
-        self.src = Gst.ElementFactory.make('audioamplify', 'audioamplify-' + name)
-        self.main.pipeline.add(self.src)
-        self.capsfilter.link(self.src)
-        self.src.set_property('amplification', props.get('amplification') or 1.0)
+        self.audioamplify = Gst.ElementFactory.make('audioamplify', 'audioamplify-' + name)
+        self.main.pipeline.add(self.audioamplify)
+        self.capsfilter.link(self.audioamplify)
+        self.audioamplify.set_property('amplification', props.get('amplification') or 1.0)
+
+        self.audiodynamic = Gst.ElementFactory.make('audiodynamic', 'audiodynamic-' + name)
+        self.main.pipeline.add(self.audiodynamic)
+        self.audioamplify.link(self.audiodynamic)
+        self.audiodynamic.set_property('threshold', props.get('compression') or 0)
+
+        self.src = self.audiodynamic
+
 
 class JackSource:
     def __init__(self, name, props, main):
@@ -180,7 +188,7 @@ class Processor:
         self.name = name
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-        self.queue.set_property('max-size-time', 1000)
+#        self.queue.set_property('max-size-time', 1000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -193,6 +201,7 @@ class Processor:
         self.deinterlace.link(self.videorate)
 
         self.videoscale = Gst.ElementFactory.make('videoscale', 'scale-' + name)
+        self.videoscale.set_property('method', 0)
         self.main.pipeline.add(self.videoscale)
         self.videorate.link(self.videoscale)
 

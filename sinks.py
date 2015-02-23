@@ -39,7 +39,7 @@ class FullscreenVideoSink:
         self.window.set_skip_taskbar_hint(True)
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-fullscreen-' + self.name)
-        self.queue.set_property('max-size-time', 10000)
+#        self.queue.set_property('max-size-time', 10000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 
@@ -67,10 +67,30 @@ class SimpleAudioSink:
         self.main.pipeline.add(self.audioconvert)
         self.source.link(self.audioconvert)
 
-        self.autoaudiosink = Gst.ElementFactory.make('pulsesink', 'pulsesink-' + self.name)
+        self.autoaudiosink = Gst.ElementFactory.make('autoaudiosink', 'autoaudiosink-' + self.name)
         self.main.pipeline.add(self.autoaudiosink)
-        self.autoaudiosink.set_property('buffer-time', 10000)
         self.audioconvert.link(self.autoaudiosink)
+
+class ALSAAudioSink:
+    def __init__(self, source, name, props, main):
+        self.source = source
+        self.name = name
+        self.main = main
+
+        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.main.pipeline.add(self.queue)
+        self.source.link(self.queue)
+
+        self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
+        self.main.pipeline.add(self.audioconvert)
+        self.queue.link(self.audioconvert)
+
+        self.alsasink = Gst.ElementFactory.make('alsasink', 'alsasink-' + self.name)
+        self.main.pipeline.add(self.alsasink)
+        self.alsasink.set_property('buffer-time', 10000)
+        if props.get('device'): self.alsasink.set_property('device', props['device'])
+        if props.get('buffer-time'): self.alsasink.set_property('buffer-time', props['buffer-time'])
+        self.audioconvert.link(self.alsasink)
 
 
 class TSUDPSink:

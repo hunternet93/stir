@@ -35,7 +35,7 @@ class Mixer:
         self.videomixer.link(self.tee)
 
         self.previewqueue = Gst.ElementFactory.make('queue', 'previewqueue-' + name)
-        self.previewqueue.set_property('max-size-time', 100000)
+#        self.previewqueue.set_property('max-size-time', 100000)
         self.main.pipeline.add(self.previewqueue)
         self.tee.link(self.previewqueue)
 
@@ -44,8 +44,8 @@ class Mixer:
         self.previewqueue.link(self.videoconvert)
 
         self.previewsink = Gst.ElementFactory.make('xvimagesink', 'previewsink-' + name)
-        self.previewsink.set_property('sync', False)
-        self.previewsink.set_property('async', False)
+#        self.previewsink.set_property('sync', True)
+#        self.previewsink.set_property('async', False)
         self.main.pipeline.add(self.previewsink)
         self.videoconvert.link(self.previewsink)
 
@@ -242,6 +242,8 @@ class Main:
                         self.audiosinks[name] = UDPSink(self.audiotee, 'audio-'+n, p, self)
                     elif n == 'simple':
                         self.audiosinks[name] = SimpleAudioSink(self.audiotee, 'audio-'+n, p, self)
+                    elif n == 'alsa':
+                        self.audiosinks[name] = ALSAAudioSink(self.audiotee, 'audio-'+n, p, self)
 
             else:
                 self.mixers[name] = Mixer(name, prop, self)
@@ -262,6 +264,7 @@ class Main:
 
     def run(self):
         self.pipeline.set_state(Gst.State.PLAYING)
+        Gst.debug_bin_to_dot_file(self.pipeline, Gst.DebugGraphDetails.ALL, 'pipeline')
         Gtk.main()
 
     def quit(self, window):
