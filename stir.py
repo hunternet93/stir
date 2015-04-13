@@ -191,8 +191,17 @@ class Main:
         self.accel = Gtk.AccelGroup()
         self.window.add_accel_group(self.accel)
 
+        self.mainbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.window.add(self.mainbox)
+        
+        self.buttonbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.mainbox.pack_start(self.buttonbox, False, False, 4)
+        self.mutebutton = Gtk.ToggleButton.new_with_label('Mute')
+        self.mutebutton.connect('toggled', self.on_mute)
+        self.buttonbox.pack_start(self.mutebutton, False, False, 4)        
+
         self.mixersbox = Gtk.Box(homogeneous = True)
-        self.window.add(self.mixersbox)
+        self.mainbox.pack_start(self.mixersbox, True, True, 8)
 
         self.pipeline = Gst.Pipeline()
 
@@ -261,6 +270,12 @@ class Main:
 
         for mixer in self.mixers.values():
             mixer.previewsink.xid = mixer.previewarea.get_property('window').get_xid()
+            
+    def on_mute(self, button):
+        for src in self.audiosources.values():
+            if type(src) == ALSASource:
+                if button.get_active(): src.audioamplify.set_property('amplification', 0)
+                else: src.audioamplify.set_property('amplification', src.props.get('amplification') or 1)
 
     def run(self):
         self.pipeline.set_state(Gst.State.PLAYING)
