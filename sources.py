@@ -100,6 +100,10 @@ class DecklinkSource:
         self.main = main
 
         self.src = Gst.ElementFactory.make('decklinkvideosrc', 'decklinkvideosrc-' + name)
+        if not self.src:
+            self.src = Gst.ElementFactory.make('decklinksrc', 'decklinksrc-' + name)
+            self.mode -= 1
+
         self.main.pipeline.add(self.src)
         self.src.set_property('buffer-size', 5)
         self.src.set_property('do-timestamp', True)
@@ -201,7 +205,7 @@ class Processor:
         self.deinterlace.link(self.videorate)
 
         self.videoscale = Gst.ElementFactory.make('videoscale', 'scale-' + name)
-        self.videoscale.set_property('method', 0)
+        self.videoscale.set_property('method', 4)
         self.main.pipeline.add(self.videoscale)
         self.videorate.link(self.videoscale)
 
