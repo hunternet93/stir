@@ -105,7 +105,7 @@ class DecklinkSource:
             self.mode -= 1
 
         self.main.pipeline.add(self.src)
-        self.src.set_property('buffer-size', 5)
+        self.src.set_property('buffer-size', 1)
         self.src.set_property('do-timestamp', True)
         self.src.set_property('device-number', self.device)
         self.src.set_property('connection', self.connection)
@@ -192,7 +192,7 @@ class Processor:
         self.name = name
 
         self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
-#        self.queue.set_property('max-size-time', 1000)
+        self.queue.set_property('max-size-time', 1000)
         self.main.pipeline.add(self.queue)
         self.source.link(self.queue)
 

@@ -44,8 +44,8 @@ class Mixer:
         self.previewqueue.link(self.videoconvert)
 
         self.previewsink = Gst.ElementFactory.make('xvimagesink', 'previewsink-' + name)
-#        self.previewsink.set_property('sync', True)
-#        self.previewsink.set_property('async', False)
+        self.previewsink.set_property('sync', False)
+        self.previewsink.set_property('async', False)
         self.main.pipeline.add(self.previewsink)
         self.videoconvert.link(self.previewsink)
 
@@ -92,9 +92,15 @@ class Mixer:
                 name, props = list(encoder.items())[0]
                 if props['type'] == 'h264':
                     self.encoders[name] = H264Encoder(self.tee, self.name + '-encoder-' + name, props, self.main)
+                if props['type'] == 'huffyuv':
+                    self.encoders[name] = HuffYUVEncoder(self.tee, self.name + '-encoder-' + name, props, self.main)
+                if props['type'] == 'jpeg':
+                    self.encoders[name] = JPEGEncoder(self.tee, self.name + '-encoder-' + name, props, self.main)
                 if props['type'] == 'aac':
                     self.encoders[name] = AACEncoder(self.main.audiotee, self.name + '-encoder-' + name, props, self.main)
-
+                if props['type'] == 'flac':
+                    self.encoders[name] = FLACEncoder(self.main.audiotee, self.name + '-encoder-' + name, props, self.main)
+                    
         self.outputs = []
         if mixdict.get('outputs'):
             for output in mixdict['outputs']:
@@ -112,11 +118,19 @@ class Mixer:
                 if outputtype == 'tsudp':
                     output = TSUDPSink(self.encoders, self.name + str(len(self.outputs)), props, self.main)
                     self.outputs.append(output)
+                if outputtype == 'mkvudp':
+                    output = MKVUDPSink(self.encoders, self.name + str(len(self.outputs)), props, self.main)
+                    self.outputs.append(output)
                 if outputtype == 'tsrecord':
                     box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
                     self.box.pack_start(box, False, False, 4)
                     self.box.reorder_child(box, 1)
                     self.outputs.append(TSRecord(self.encoders, self.name + str(len(self.outputs)), props, self.main, box))
+                if outputtype == 'mkvrecord':
+                    box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+                    self.box.pack_start(box, False, False, 4)
+                    self.box.reorder_child(box, 1)
+                    self.outputs.append(MKVRecord(self.encoders, self.name + str(len(self.outputs)), props, self.main, box))
 
         self.buttons[0].set_active(True)
         self.on_button_toggled(self.buttons[0], self.buttons[0].sname)
@@ -139,8 +153,11 @@ class Mixer:
 
                 if not props.get('alpha') == None: processor.alpha.set_property('alpha', props.get('alpha'))
                 else: processor.alpha.set_property('alpha', 1)
+                
+                if not props.get('method') == None: processor.alpha.set_property('method', props.get('method'))
 
                 if not props.get('chroma') == None:
+                    print(props.get('chroma'))
                     processor.alpha.set_property('method', 3)
                     processor.alpha.set_property('target-r', props.get('chroma')[0])
                     processor.alpha.set_property('target-g', props.get('chroma')[1])
@@ -159,8 +176,8 @@ class Mixer:
                     processor.alpha.set_property('white-sensitivity', props.get('chroma-white-sensitivity'))
                 else:
                     processor.alpha.set_property('white-sensitivity', 100)
-                if not props.get('angle') == None:
-                    processor.alpha.set_property('angle', props.get('angle'))
+                if not props.get('chroma-angle') == None:
+                    processor.alpha.set_property('angle', props.get('chroma-angle'))
                 else:
                     processor.alpha.set_property('angle', 20)
 
@@ -247,12 +264,13 @@ class Main:
                 for output in prop['outputs']:
                     if type(output) == dict: n, p = list(output.items())[0]
                     else: n, p = output, None
+                    l = str(len(self.audiosinks))
                     if n == 'udp':
-                        self.audiosinks[name] = UDPSink(self.audiotee, 'audio-'+n, p, self)
+                        self.audiosinks[name] = UDPSink(self.audiotee, 'audio-'+l+n, p, self)
                     elif n == 'simple':
-                        self.audiosinks[name] = SimpleAudioSink(self.audiotee, 'audio-'+n, p, self)
+                        self.audiosinks[name] = SimpleAudioSink(self.audiotee, 'audio-'+l+n, p, self)
                     elif n == 'alsa':
-                        self.audiosinks[name] = ALSAAudioSink(self.audiotee, 'audio-'+n, p, self)
+                        self.audiosinks[name] = ALSAAudioSink(self.audiotee, 'audio-'+l+n, p, self)
 
             else:
                 self.mixers[name] = Mixer(name, prop, self)

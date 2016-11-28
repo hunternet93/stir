@@ -1,5 +1,6 @@
 import time, gi
 from gi.repository import GObject, Gst, Gtk, GstVideo, GdkX11, Gdk
+from encoders import *
 
 class SimpleVideoSink:
     def __init__(self, source, name, props, main):
@@ -120,6 +121,32 @@ class TSUDPSink:
             encoders[encoder].tee.link(queue)
 
 
+class MKVUDPSink:
+    def __init__(self, encoders, name, props, main):
+        # TODO: Eventually add support for different encoders/muxers
+        self.encoders = encoders
+        self.name = name
+        self.main = main
+
+        self.muxer = Gst.ElementFactory.make('matroskamux', 'mpegtsmux-' + self.name)
+        self.main.pipeline.add(self.muxer)
+
+        self.udpsink = Gst.ElementFactory.make('udpsink', 'udpsink-' + self.name)
+        self.main.pipeline.add(self.udpsink)
+        self.udpsink.set_property('host', props['host'])
+        self.udpsink.set_property('port', props.get('port') or 6473)
+        if props.get('iface'): self.udpsink.set_property('multicast-iface', props['iface'])
+        self.udpsink.set_property('sync', False)
+        self.muxer.link(self.udpsink)
+
+        self.queues = []
+        for encoder in props.get('encoders'):
+            queue = Gst.ElementFactory.make('queue', 'queue'+str(len(self.queues)) + '-' + self.name)
+            self.main.pipeline.add(queue)
+            queue.link(self.muxer)
+            self.queues.append(queue)
+            encoders[encoder].tee.link(queue)
+
 class TSFileSink:
     def __init__(self, encoders, name, props, main):
         self.name, self.main = name, main
@@ -141,9 +168,17 @@ class TSFileSink:
             print('filesink linking to', encoder.name)
             queue = Gst.ElementFactory.make('queue', 'queue' + str(len(self.queues)) + '-' + self.name)
             self.main.pipeline.add(queue)
-            queue.link(self.muxer)
+            
+            if type(encoder) == H264Encoder:
+                parse = Gst.ElementFactory.make('h264parse', 'h264parse' + str(len(self.queues)) + '-' + self.name)
+                self.main.pipeline.add(parse)
+                print(encoder.tee.link(parse))
+                parse.link(queue)
+            else:
+                print(encoder.tee.link(queue))
+                    
+            print(queue.link(self.muxer))
             self.queues.append(queue)
-            print(encoder.tee.link(queue))
             queue.set_state(Gst.State.PLAYING)
 
         self.muxer.set_state(Gst.State.PLAYING)
@@ -155,7 +190,9 @@ class TSFileSink:
         for queue in self.queues:
             encpad = queue.get_static_pad('sink').get_peer()
             encpad.get_parent_element().remove_pad(encpad)
+
             muxpad = queue.get_static_pad('src').get_peer()
+            muxpad.send_event(Gst.Event.new_eos())
             self.muxer.remove_pad(muxpad)
 
             self.main.pipeline.remove(queue)
@@ -189,5 +226,79 @@ class TSRecord:
         else:
             self.tsfilesink.stop()
             self.tsfilesink = None
+            self.button.set_label('Record')
+            self.label.set_markup("<b>Not Recording</b>")
+
+class MKVFileSink:
+    def __init__(self, encoders, name, props, main):
+        self.name, self.main = name, main
+        self.queues = []
+
+        self.muxer = Gst.ElementFactory.make('matroskamux', 'matroskamux-' + self.name)
+        self.main.pipeline.add(self.muxer)
+
+        self.filesink = Gst.ElementFactory.make('filesink', 'filesink-' + self.name)
+        self.main.pipeline.add(self.filesink)
+        self.filesink.set_property('location', props['directory'] + '/Stir - ' + time.strftime('%Y-%m-%d %I:%M:%S %p') + '.mkv')
+        self.filesink.set_property('sync', False)
+        self.filesink.set_property('async', False)
+        self.muxer.link(self.filesink)
+
+        self.encoders = []
+        for encoder in props.get('encoders'): self.encoders.append(encoders[encoder])
+        for encoder in self.encoders:
+            print('filesink linking to', encoder.name)
+            queue = Gst.ElementFactory.make('queue', 'queue' + str(len(self.queues)) + '-' + self.name)
+            self.main.pipeline.add(queue)
+            print(encoder.tee.link(queue))
+            print(queue.link(self.muxer))
+            self.queues.append(queue)
+            queue.set_state(Gst.State.PLAYING)
+
+        self.muxer.set_state(Gst.State.PLAYING)
+        self.filesink.set_state(Gst.State.PLAYING)
+
+
+    def stop(self):
+        self.filesink.get_static_pad('sink').send_event(Gst.Event.new_eos())
+        for queue in self.queues:
+            encpad = queue.get_static_pad('sink').get_peer()
+            encpad.get_parent_element().remove_pad(encpad)
+
+            muxpad = queue.get_static_pad('src').get_peer()
+            muxpad.send_event(Gst.Event.new_eos())
+            self.muxer.remove_pad(muxpad)
+
+            queue.set_state(Gst.State.NULL)
+            self.main.pipeline.remove(queue)
+
+        self.main.pipeline.remove(self.muxer)
+        self.muxer.set_state(Gst.State.NULL)
+
+        self.main.pipeline.remove(self.filesink)
+        self.filesink.set_state(Gst.State.NULL)
+
+class MKVRecord:
+    def __init__(self, encoders, name, props, main, box):
+        self.encoders, self.name, self.props, self.main, self.box = encoders, name, props, main, box
+        self.button = Gtk.ToggleButton.new_with_label('Record')
+        self.button.connect('toggled', self.on_button_toggled)
+        self.box.pack_start(self.button, False, False, 4)
+        self.label = Gtk.Label()
+        self.label.set_markup("<b>Not Recording</b>")
+        self.box.pack_start(self.label, False, False, 4)
+
+        self.mkvfilesink = None
+
+    def on_button_toggled(self, button):
+        print('onbuttontoggled')
+        if button.get_active():
+            self.mkvfilesink = MKVFileSink(self.encoders, self.name, self.props, self.main)
+            self.button.set_label('Stop')
+            self.label.set_markup("Recording to " + self.mkvfilesink.filesink.get_property('location'))
+
+        else:
+            self.mkvfilesink.stop()
+            self.mkvfilesink = None
             self.button.set_label('Record')
             self.label.set_markup("<b>Not Recording</b>")

@@ -21,7 +21,7 @@ class H264Encoder:
 
         self.encoder = Gst.ElementFactory.make('x264enc', 'x264enc-' + self.name)
         self.main.pipeline.add(self.encoder)
-        self.encoder.set_property('tune', props.get('tune') or 'zerolatency')
+        self.encoder.set_property('tune', props.get('tune') or 0)
         self.encoder.set_property('speed-preset', props.get('preset') or 'fast')
         self.encoder.set_property('bitrate', props.get('bitrate') or 2048)
         self.encoder.set_property('sliced-threads', props.get('sliced-threads') or False)
@@ -30,14 +30,42 @@ class H264Encoder:
         if props.get('qp'): self.encoder.set_property('quantizer', props['qp'])
         if props.get('keyint'): self.encoder.set_property('key-int-max', props['keyint'])
         self.capsfilter.link(self.encoder)
-
-        self.h264parse = Gst.ElementFactory.make('h264parse', 'h264parse-' + self.name)
-        self.main.pipeline.add(self.h264parse)
-        self.encoder.link(self.h264parse)
+        
+        self.parse = Gst.ElementFactory.make('h264parse', 'h264parse-' + self.name)
+        self.main.pipeline.add(self.parse)
+        self.encoder.link(self.parse)
 
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
         self.main.pipeline.add(self.tee)
-        self.h264parse.link(self.tee)
+        self.parse.link(self.tee)
+
+        self.fakequeue = Gst.ElementFactory.make('queue', 'fakequeue-' + self.name)
+        self.main.pipeline.add(self.fakequeue)
+        self.tee.link(self.fakequeue)
+
+        self.fakesink = Gst.ElementFactory.make('fakesink', 'fakesink-' + self.name)
+        self.main.pipeline.add(self.fakesink)
+        self.fakequeue.link(self.fakesink)
+        
+class HuffYUVEncoder:
+    def __init__(self, source, name, props, main):
+        self.source, self.name, self.main = source, name, main
+        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 2000000)
+        self.main.pipeline.add(self.queue)
+        self.source.link(self.queue)
+
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
+        self.main.pipeline.add(self.videoconvert)
+        self.queue.link(self.videoconvert)
+        
+        self.encoder = Gst.ElementFactory.make('avenc_huffyuv', 'huffyuv-' + self.name)
+        self.main.pipeline.add(self.encoder)
+        self.videoconvert.link(self.encoder)
+        
+        self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
+        self.main.pipeline.add(self.tee)
+        self.encoder.link(self.tee)
 
         self.fakequeue = Gst.ElementFactory.make('queue', 'fakequeue-' + self.name)
         self.main.pipeline.add(self.fakequeue)
@@ -47,14 +75,43 @@ class H264Encoder:
         self.main.pipeline.add(self.fakesink)
         self.fakequeue.link(self.fakesink)
 
+class JPEGEncoder:
+    def __init__(self, source, name, props, main):
+        self.source, self.name, self.main = source, name, main
+        self.queue = Gst.ElementFactory.make('queue', 'queue-' + self.name)
+        self.queue.set_property('max-size-time', 2000000)
+        self.main.pipeline.add(self.queue)
+        self.source.link(self.queue)
 
+        self.videoconvert = Gst.ElementFactory.make('videoconvert', 'videoconvert-' + self.name)
+        self.main.pipeline.add(self.videoconvert)
+        self.queue.link(self.videoconvert)
+        
+        self.encoder = Gst.ElementFactory.make('jpegenc', 'jpeg-' + self.name)
+        self.encoder.set_property('quality', 85)
+        self.encoder.set_property('idct-method', 2)
+        self.main.pipeline.add(self.encoder)
+        self.videoconvert.link(self.encoder)
+        
+        self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
+        self.main.pipeline.add(self.tee)
+        self.encoder.link(self.tee)
+
+        self.fakequeue = Gst.ElementFactory.make('queue', 'fakequeue-' + self.name)
+        self.main.pipeline.add(self.fakequeue)
+        self.tee.link(self.fakequeue)
+
+        self.fakesink = Gst.ElementFactory.make('fakesink', 'fakesink-' + self.name)
+        self.main.pipeline.add(self.fakesink)
+        self.fakequeue.link(self.fakesink)
+        
 class AACEncoder:
     def __init__(self, source, name, props, main):
         self.source, self.name, self.main = source, name, main
         self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
         self.main.pipeline.add(self.audioconvert)
         self.main.audiotee.link(self.audioconvert)
-
+        
         self.encoder = Gst.ElementFactory.make('faac', 'faac-' + self.name)
         self.main.pipeline.add(self.encoder)
         self.audioconvert.link(self.encoder)
@@ -66,6 +123,29 @@ class AACEncoder:
         self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
         self.main.pipeline.add(self.tee)
         self.aacparse.link(self.tee)
+
+        self.fakequeue = Gst.ElementFactory.make('queue', 'fakequeue-' + self.name)
+        self.main.pipeline.add(self.fakequeue)
+        self.tee.link(self.fakequeue)
+
+        self.fakesink = Gst.ElementFactory.make('fakesink', 'fakesink-' + self.name)
+        self.main.pipeline.add(self.fakesink)
+        self.fakequeue.link(self.fakesink)
+        
+class FLACEncoder:
+    def __init__(self, source, name, props, main):
+        self.source, self.name, self.main = source, name, main
+        self.audioconvert = Gst.ElementFactory.make('audioconvert', 'audioconvert-' + self.name)
+        self.main.pipeline.add(self.audioconvert)
+        self.main.audiotee.link(self.audioconvert)
+        
+        self.encoder = Gst.ElementFactory.make('flacenc', 'flac-' + self.name)
+        self.main.pipeline.add(self.encoder)
+        self.audioconvert.link(self.encoder)
+
+        self.tee = Gst.ElementFactory.make('tee', 'tee-' + self.name)
+        self.main.pipeline.add(self.tee)
+        self.encoder.link(self.tee)
 
         self.fakequeue = Gst.ElementFactory.make('queue', 'fakequeue-' + self.name)
         self.main.pipeline.add(self.fakequeue)
